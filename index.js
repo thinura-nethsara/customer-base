@@ -502,23 +502,52 @@ async function initializeWhatsAppInstance(sessionId, phoneNumber, mode) {
                 break;
 
             // ════════════════ SOCIAL MEDIA DOWNLOADERS ════════════════
-            case 'song':
-                if (!text) return reply(from, "Please specify a path name or URL.", mec);
-                await reply(from, "⏳ Sourcing & streaming track data...", mec);
-                try {
-                    let streamUrl = text;
-                    if (!text.includes("youtube.com") && !text.includes("youtu.be")) {
-                        const ytSearch = await axios.get(`https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(text)}&type=video&key=AIzaSyCEq9oJnzf5eFhkqdLlM_ggjCifaC4kk5o`);
-                        if (!ytSearch.data.items.length) return reply(from, "❌ Tracking failure.", mec);
-                        streamUrl = `https://www.youtube.com/watch?v=${ytSearch.data.items[0].id.videoId}`;
-                    }
-                    const mp3Res = await axios.get(`https://mr-thinuzz-api-build.vercel.app/api/ytmp3/download?url=${streamUrl}&apiKey=key_6eff37305f63aa5c`);
-                    if (mp3Res.data?.data?.download) {
-                        await sock.sendMessage(from, { audio: { url: mp3Res.data.data.download }, mimetype: 'audio/mp4' }, { quoted: mec });
-                    } else { reply(from, "❌ Extraction pipeline denied.", mec); }
-                } catch (e) { reply(from, "⚠️ Server processing error.", mec); }
-                break;
-
+           case 'song':
+    if (!text) return reply(from, "Please provide a YouTube URL.", mec);
+    await reply(from, "⏳ Sourcing & streaming track data...", mec);
+    try {
+        let streamUrl = text;
+        
+        // Clean YouTube URL
+        if (text.includes('youtu.be/')) {
+            const videoId = text.split('youtu.be/')[1].split('?')[0];
+            streamUrl = `https://www.youtube.com/watch?v=${videoId}`;
+        } else if (text.includes('youtube.com/watch')) {
+            const urlObj = new URL(text);
+            const videoId = urlObj.searchParams.get('v');
+            if (videoId) {
+                streamUrl = `https://www.youtube.com/watch?v=${videoId}`;
+            }
+        }
+        
+        const apiUrl = `https://mr-thinuzz-api-build.vercel.app/api/ytmp3/download?url=${encodeURIComponent(streamUrl)}&apiKey=key_faa62e4037a95cda`;
+        console.log("🔍 Song API:", apiUrl);
+        
+        const mp3Res = await axios.get(apiUrl, {
+            timeout: 30000,
+            headers: { 'User-Agent': 'Mozilla/5.0' }
+        });
+        
+        console.log("📦 Song Response:", JSON.stringify(mp3Res.data, null, 2));
+        
+        const audioUrl = mp3Res.data?.data?.links?.audio;
+        const title = mp3Res.data?.data?.title || "Audio";
+        
+        if (audioUrl) {
+            await sock.sendMessage(from, { 
+                audio: { url: audioUrl }, 
+                mimetype: 'audio/mpeg4',
+                fileName: `${title}.mp3`,
+                caption: `🎵 *${title}*`
+            }, { quoted: mec });
+        } else {
+            reply(from, "❌ Extraction pipeline denied.", mec);
+        }
+    } catch (e) {
+        console.error("Song error:", e.message);
+        reply(from, `⚠️ Error: ${e.message}`, mec);
+    }
+    break;
             case 'ytmp4':
                 if (!text) return reply(from, "Provide an extraction endpoint reference.", mec);
                 await reply(from, "⏳ Syncing 720p visual array...", mec);
