@@ -1,17 +1,42 @@
 const axios = require("axios");
 
 module.exports = (register) => {
-  // Hardcoded API Keys
-  const thinuzzKey = "key_faa62e4037a95cda"; // Mr Thinuzz API Key
-  const geminiKey = process.env.GEMINI_API_KEY; // Still use env for Gemini
+  const thinuzzKey = "key_faa62e4037a95cda";
+  const geminiKey = process.env.GEMINI_API_KEY;
 
-  // Helper function to extract audio URL from different response formats
+  // Helper function to clean YouTube URL
+  const cleanYouTubeUrl = (url) => {
+    try {
+      // Handle youtu.be URLs
+      if (url.includes('youtu.be/')) {
+        const videoId = url.split('youtu.be/')[1].split('?')[0];
+        return `https://www.youtube.com/watch?v=${videoId}`;
+      }
+      
+      // Handle youtube.com URLs with query parameters
+      if (url.includes('youtube.com/watch')) {
+        const urlObj = new URL(url);
+        const videoId = urlObj.searchParams.get('v');
+        if (videoId) {
+          return `https://www.youtube.com/watch?v=${videoId}`;
+        }
+      }
+      
+      return url;
+    } catch (e) {
+      return url;
+    }
+  };
+
+  // Helper function to extract audio URL from Thinuzz API response
   const extractAudioUrl = (data) => {
     return data?.data?.links?.audio || 
+           data?.links?.audio ||
            data?.result?.download_url || 
            data?.download_url || 
            data?.audio_url ||
-           data?.url;
+           data?.url ||
+           data?.data?.url;
   };
 
   // Helper function to extract video URL from different response formats
@@ -21,26 +46,30 @@ module.exports = (register) => {
            data?.result?.download_url || 
            data?.download_url || 
            data?.video_url ||
-           data?.url;
+           data?.url ||
+           data?.data?.links?.hd ||
+           data?.data?.links?.sd;
   };
 
   // Helper function to extract title from different response formats
   const extractTitle = (data) => {
     return data?.data?.title || 
+           data?.title ||
            data?.result?.title || 
-           data?.title || 
            "Media";
   };
 
   register("song", "Extract MP3 from YouTube", "Info", async (ctx) => {
     const query = ctx.args.join(" ");
-    if (!query) return ctx.reply("❌ Please provide a YouTube URL or search query.");
+    if (!query) return ctx.reply("❌ Please provide a YouTube URL.");
     
-    await ctx.reply("⏳ *Processing YouTube audio extraction...*");
+    // Clean the URL
+    const cleanUrl = cleanYouTubeUrl(query);
+    await ctx.reply("⏳ *Sourcing & streaming track data...*");
     
     try {
-      const apiUrl = `https://mr-thinuzz-api-build.vercel.app/api/ytmp3/download?url=${encodeURIComponent(query)}&apiKey=${thinuzzKey}`;
-      console.log("🔍 Calling API:", apiUrl);
+      const apiUrl = `https://mr-thinuzz-api-build.vercel.app/api/ytmp3/download?url=${encodeURIComponent(cleanUrl)}&apiKey=${thinuzzKey}`;
+      console.log("🔍 API URL:", apiUrl);
       
       const res = await axios.get(apiUrl, {
         timeout: 30000,
@@ -51,7 +80,7 @@ module.exports = (register) => {
       
       console.log("📦 API Response:", JSON.stringify(res.data, null, 2));
       
-      if (res.data?.status) {
+      if (res.data?.status === true) {
         const audioUrl = extractAudioUrl(res.data);
         const title = extractTitle(res.data);
         
@@ -63,11 +92,11 @@ module.exports = (register) => {
             caption: `🎵 *${title}*\n✅ Download Successful!`
           }, { quoted: ctx.msg });
         } else {
-          ctx.reply("❌ No audio link found in API response");
+          ctx.reply("❌ Extraction pipeline denied - No audio link found");
         }
       } else {
         const errorMsg = res.data?.message || res.data?.error || "Unknown error";
-        ctx.reply(`❌ Extraction failed: ${errorMsg}`);
+        ctx.reply(`❌ Extraction pipeline denied: ${errorMsg}`);
       }
     } catch (e) {
       console.error("❌ Song download error:", e.message);
@@ -95,11 +124,13 @@ module.exports = (register) => {
     const query = ctx.args.join(" ");
     if (!query) return ctx.reply("❌ Provide a valid YouTube video link.");
     
+    // Clean the URL
+    const cleanUrl = cleanYouTubeUrl(query);
     await ctx.reply("⏳ *Buffering 720p HD stream output...*");
     
     try {
-      const apiUrl = `https://mr-thinuzz-api-build.vercel.app/api/ytmp4v2/download?url=${encodeURIComponent(query)}&quality=720&apiKey=${thinuzzKey}`;
-      console.log("🔍 Calling API:", apiUrl);
+      const apiUrl = `https://mr-thinuzz-api-build.vercel.app/api/ytmp4v2/download?url=${encodeURIComponent(cleanUrl)}&quality=720&apiKey=${thinuzzKey}`;
+      console.log("🔍 API URL:", apiUrl);
       
       const res = await axios.get(apiUrl, {
         timeout: 30000,
@@ -110,7 +141,7 @@ module.exports = (register) => {
       
       console.log("📦 API Response:", JSON.stringify(res.data, null, 2));
       
-      if (res.data?.status) {
+      if (res.data?.status === true) {
         const videoUrl = extractVideoUrl(res.data);
         const title = extractTitle(res.data);
         
@@ -141,7 +172,7 @@ module.exports = (register) => {
     
     try {
       const apiUrl = `https://www.movanest.xyz/v2/fbdown?url=${encodeURIComponent(query)}`;
-      console.log("🔍 Calling API:", apiUrl);
+      console.log("🔍 API URL:", apiUrl);
       
       const res = await axios.get(apiUrl, {
         timeout: 30000,
@@ -182,7 +213,7 @@ module.exports = (register) => {
     
     try {
       const apiUrl = `https://mr-thinuzz-api-build.vercel.app/api/tiktok?url=${encodeURIComponent(query)}&apiKey=${thinuzzKey}`;
-      console.log("🔍 Calling API:", apiUrl);
+      console.log("🔍 API URL:", apiUrl);
       
       const res = await axios.get(apiUrl, {
         timeout: 30000,
@@ -193,7 +224,7 @@ module.exports = (register) => {
       
       console.log("📦 API Response:", JSON.stringify(res.data, null, 2));
       
-      if (res.data?.status) {
+      if (res.data?.status === true) {
         const videoUrl = extractVideoUrl(res.data);
         const title = extractTitle(res.data);
         
@@ -223,7 +254,7 @@ module.exports = (register) => {
     
     try {
       const apiUrl = `https://mr-thinuzz-api-build.vercel.app/api/instadown/download?url=${encodeURIComponent(query)}&apiKey=${thinuzzKey}`;
-      console.log("🔍 Calling API:", apiUrl);
+      console.log("🔍 API URL:", apiUrl);
       
       const res = await axios.get(apiUrl, {
         timeout: 30000,
@@ -234,7 +265,7 @@ module.exports = (register) => {
       
       console.log("📦 API Response:", JSON.stringify(res.data, null, 2));
       
-      if (res.data?.status) {
+      if (res.data?.status === true) {
         const videoUrl = extractVideoUrl(res.data);
         const title = extractTitle(res.data);
         
