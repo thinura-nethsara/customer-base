@@ -22,21 +22,28 @@ module.exports = (register) => {
         }
       }
       
+      // Handle youtube.com/shorts URLs
+      if (url.includes('youtube.com/shorts/')) {
+        const videoId = url.split('youtube.com/shorts/')[1].split('?')[0];
+        return `https://www.youtube.com/watch?v=${videoId}`;
+      }
+      
       return url;
     } catch (e) {
+      console.error("URL cleaning error:", e);
       return url;
     }
   };
 
   // Helper function to extract audio URL from Thinuzz API response
   const extractAudioUrl = (data) => {
+    // Based on your API response structure
     return data?.data?.links?.audio || 
            data?.links?.audio ||
-           data?.result?.download_url || 
+           data?.data?.download_url || 
            data?.download_url || 
            data?.audio_url ||
-           data?.url ||
-           data?.data?.url;
+           data?.url;
   };
 
   // Helper function to extract video URL from different response formats
@@ -78,11 +85,16 @@ module.exports = (register) => {
         }
       });
       
-      console.log("📦 API Response:", JSON.stringify(res.data, null, 2));
+      console.log("📦 Full API Response:", JSON.stringify(res.data, null, 2));
       
+      // Check if response has status true and has data
       if (res.data?.status === true) {
-        const audioUrl = extractAudioUrl(res.data);
-        const title = extractTitle(res.data);
+        // Direct path to audio URL based on your API response
+        const audioUrl = res.data?.data?.links?.audio;
+        const title = res.data?.data?.title || "Audio";
+        
+        console.log("🎵 Extracted Audio URL:", audioUrl);
+        console.log("📝 Title:", title);
         
         if (audioUrl) {
           await ctx.sock.sendMessage(ctx.jid, { 
@@ -92,7 +104,7 @@ module.exports = (register) => {
             caption: `🎵 *${title}*\n✅ Download Successful!`
           }, { quoted: ctx.msg });
         } else {
-          ctx.reply("❌ Extraction pipeline denied - No audio link found");
+          ctx.reply("❌ No audio link found in API response");
         }
       } else {
         const errorMsg = res.data?.message || res.data?.error || "Unknown error";
